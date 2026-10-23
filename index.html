@@ -4,12 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QA Bug Tracker</title>
-    <link rel="stylesheet" href="style.css?v=4">
+    <link rel="stylesheet" href="style.css?v=10">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 </head>
 <body>
     <!-- Header -->
@@ -21,7 +22,7 @@
         <div class="header-right">
             <!-- Admin Tools (Revealed when Admin is active) -->
             <div id="adminControls" style="display: none; align-items: center; gap: 8px;">
-                <button class="btn btn-header-accent" onclick="showAdminUploadModal()" title="Upload Excel to a Customer">
+                <button class="btn btn-header-accent" onclick="showAdminUploadModal()" title="Upload Excel to a Feature">
                     <i class="fas fa-cloud-arrow-up"></i> Import Test Cases
                 </button>
                 <button class="btn btn-outline" onclick="exportAllDataJSON()" title="Backup all data to JSON">
@@ -52,8 +53,8 @@
             </div>
 
             <div class="sidebar-header">
-                <h2>Customers</h2>
-                <button class="btn btn-sm btn-primary" id="sidebarAddCustBtn" style="display: none;" onclick="showAddCustomerModal()" title="Add Customer">
+                <h2>Features</h2>
+                <button class="btn btn-sm btn-primary" id="sidebarAddCustBtn" style="display: none;" onclick="showAddCustomerModal()" title="Add Feature">
                     <i class="fas fa-plus"></i> Add
                 </button>
             </div>
@@ -71,7 +72,7 @@
                     <h2>QA Bug Tracker Portal</h2>
                     <p>Welcome! Please use your company's dedicated QA Bug Tracker access link to review test cases.</p>
                     <div style="margin-top: 24px; background: white; padding: 24px; border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--gray-200);">
-                        <p style="font-size: 13px; font-weight: 500; color: var(--gray-600); margin-bottom: 10px;">Enter Customer Access Code or Admin Password:</p>
+                        <p style="font-size: 13px; font-weight: 500; color: var(--gray-600); margin-bottom: 10px;">Enter Feature Access Code or Admin Password:</p>
                         <div style="display: flex; gap: 8px;">
                             <input type="password" id="manualAccessCodeInput" placeholder="••••••••" style="flex: 1; padding: 10px 14px; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 14px;" onkeypress="if(event.key==='Enter') submitAccessCode()">
                             <button class="btn btn-primary" onclick="submitAccessCode()">Enter</button>
@@ -85,22 +86,47 @@
                 <div class="welcome">
                     <i class="fas fa-chart-line welcome-icon"></i>
                     <h2>QA Bug Tracker Dashboard</h2>
-                    <p>Overview of all active customer bug trackers and test execution progress.</p>
+                    <p>Overview of features and their module execution progress.</p>
                     <div class="stats-grid" id="dashboardStats"></div>
+                </div>
+
+                <div id="dashboardFeatureStatusSection" class="dashboard-sections" style="display:none;">
+                    <div class="dashboard-section-header">
+                        <h3 id="dashboardFeatureStatusTitle"></h3>
+                        <button class="btn btn-ghost btn-sm" onclick="clearDashboardFeatureFilter()" aria-label="Close module status details">&times; Close</button>
+                    </div>
+                    <div class="customer-overview-grid" id="dashboardFeatureStatusGrid"></div>
                 </div>
 
                 <div class="dashboard-sections">
                     <div class="dashboard-section-header">
-                        <h3><i class="fas fa-building"></i> Customer Bug Tracker Overviews</h3>
-                        <p>Click any customer or bug tracker to navigate directly to its test cases.</p>
+                        <h3><i class="fas fa-table-list"></i> Module Execution Summary</h3>
+                        <p>Each module is classified by its execution state: not started, currently under test, or completed.</p>
                     </div>
-                    <div class="customer-overview-grid" id="dashboardCustomerGrid">
-                        <!-- Dynamically populated with customer & bug tracker cards -->
+                    <div class="table-container">
+                        <table class="dashboard-feature-table">
+                            <thead>
+                                <tr>
+                                    <th>Feature</th>
+                                    <th>Module</th>
+                                    <th>Coverage</th>
+                                    <th>No. TC</th>
+                                    <th>% Execution</th>
+                                    <th>% Pass</th>
+                                    <th>No. Def.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dashboardFeatureBody"></tbody>
+                        </table>
+                        <div class="empty-state" id="emptyDashboardFeatures" style="display:none;">
+                            <i class="fas fa-list-check"></i>
+                            <p>No module data available yet.</p>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Customer View -->
+            <!-- Feature View -->
             <div id="customerView" class="view">
                 <div class="view-header">
                     <div>
@@ -112,10 +138,10 @@
                     <div class="view-actions">
                         <div id="customerAdminActions" style="display: none; align-items: center; gap: 8px;">
                             <button class="btn btn-primary" onclick="showAddPocModal()">
-                                <i class="fas fa-plus"></i> Add Bug Tracker
+                                <i class="fas fa-plus"></i> Add Module
                             </button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteCurrentCustomer()" title="Delete Customer">
-                                <i class="fas fa-trash"></i> Delete Customer
+                            <button class="btn btn-danger btn-sm" onclick="deleteCurrentCustomer()" title="Delete Feature">
+                                <i class="fas fa-trash"></i> Delete Feature
                             </button>
                         </div>
                     </div>
@@ -126,7 +152,7 @@
                     <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 260px;">
                         <i class="fas fa-link" style="color: var(--primary); font-size: 16px;"></i>
                         <div>
-                            <div style="font-size: 13px; font-weight: 600; color: var(--gray-800);">Customer's Private Link (Competitors cannot see this):</div>
+                            <div style="font-size: 13px; font-weight: 600; color: var(--gray-800);">Feature's Private Link:</div>
                             <code id="customerLinkText" style="display: inline-block; background: white; padding: 4px 8px; border-radius: 4px; border: 1px solid #d1d5db; font-size: 12px; color: var(--primary); margin-top: 4px; word-break: break-all;"></code>
                         </div>
                     </div>
@@ -140,12 +166,12 @@
                 </div>
             </div>
 
-            <!-- Bug Tracker / Test Cases Execution View -->
+            <!-- Feature / Test Cases Execution View -->
             <div id="pocView" class="view">
                 <div class="view-header">
                     <div>
                         <button class="btn btn-ghost btn-sm" onclick="showCustomer(currentCustomerId)">
-                            <i class="fas fa-arrow-left"></i > Bug Trackers
+                            <i class="fas fa-arrow-left"></i > Features
                         </button>
                         <h2 id="pocTitle" class="inline-title"></h2>
                         <span class="badge" id="pocBadge"></span>
@@ -155,12 +181,13 @@
                         <button class="btn btn-success" onclick="exportPocToExcel()" title="Export test results to Excel file">
                             <i class="fas fa-file-excel"></i> Export Excel
                         </button>
+                        <div id="pocExecutionControl"></div>
                         <div id="pocAdminActions" style="display: none; align-items: center; gap: 8px;">
                             <button class="btn btn-primary" onclick="showAddTestCaseModal()">
                                 <i class="fas fa-plus"></i> Add Test Case
                             </button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteCurrentPoc()" title="Delete Bug Tracker">
-                                <i class="fas fa-trash"></i> Delete Bug Tracker
+                            <button class="btn btn-danger btn-sm" onclick="deleteCurrentPoc()" title="Delete Module">
+                                <i class="fas fa-trash"></i> Delete Module
                             </button>
                         </div>
                     </div>
@@ -189,6 +216,14 @@
                         <input type="text" id="searchInput" placeholder="Search test cases..." oninput="renderTestCases()">
                     </div>
                     <div class="stats-mini" id="pocStats"></div>
+                    <div id="columnAdminActions" class="column-admin-actions" style="display: none;">
+                        <button class="btn btn-outline btn-sm" onclick="showAddColumnModal()">
+                            <i class="fas fa-columns"></i> Add Column
+                        </button>
+                        <button class="btn btn-outline btn-sm" onclick="showDeleteColumnModal()">
+                            <i class="fas fa-minus"></i> Delete Column
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Test Case Execution Table -->
@@ -203,11 +238,15 @@
                     </table>
                     <div class="empty-state" id="emptyTestCases" style="display:none;">
                         <i class="fas fa-clipboard-list"></i>
-                        <p>No test cases yet for this bug tracker.</p>
+                        <p>No test cases yet for this module.</p>
                     </div>
                 </div>
             </div>
         </main>
+    </div>
+
+    <div id="testTableScrollProxy" class="table-scrollbar-proxy" role="region" tabindex="0" aria-label="Horizontal test table scrollbar" aria-controls="testCaseTable">
+        <div id="testTableScrollProxyContent"></div>
     </div>
 
     <!-- Modal Overlay -->
@@ -230,6 +269,6 @@
     <!-- Toast Notification -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="app.js?v=4"></script>
+    <script src="app.js?v=11"></script>
 </body>
 </html>
