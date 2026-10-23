@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>POC Test Tracker</title>
+    <title>QA Bug Tracker</title>
     <link rel="stylesheet" href="style.css?v=4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -16,7 +16,7 @@
     <header class="header">
         <div class="header-left" onclick="showDashboard()" style="cursor: pointer;" title="Back to Dashboard">
             <i class="fas fa-vial header-icon"></i>
-            <h1>POC Test Tracker</h1>
+            <h1>QA Bug Tracker</h1>
         </div>
         <div class="header-right">
             <!-- Admin Tools (Revealed when Admin is active) -->
@@ -68,8 +68,8 @@
             <div id="portalLandingView" class="view">
                 <div class="welcome" style="max-width: 600px; margin: 60px auto;">
                     <i class="fas fa-shield-halved welcome-icon" style="font-size: 64px; color: var(--primary);"></i>
-                    <h2>POC Test Portal</h2>
-                    <p>Welcome! Please use your company's dedicated POC access link to review test cases.</p>
+                    <h2>QA Bug Tracker Portal</h2>
+                    <p>Welcome! Please use your company's dedicated QA Bug Tracker access link to review test cases.</p>
                     <div style="margin-top: 24px; background: white; padding: 24px; border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--gray-200);">
                         <p style="font-size: 13px; font-weight: 500; color: var(--gray-600); margin-bottom: 10px;">Enter Customer Access Code or Admin Password:</p>
                         <div style="display: flex; gap: 8px;">
@@ -84,18 +84,18 @@
             <div id="dashboardView" class="view active">
                 <div class="welcome">
                     <i class="fas fa-chart-line welcome-icon"></i>
-                    <h2>POC Test Tracker Dashboard</h2>
-                    <p>Overview of all active customer POCs and test execution progress.</p>
+                    <h2>QA Bug Tracker Dashboard</h2>
+                    <p>Overview of all active customer bug trackers and test execution progress.</p>
                     <div class="stats-grid" id="dashboardStats"></div>
                 </div>
 
                 <div class="dashboard-sections">
                     <div class="dashboard-section-header">
-                        <h3><i class="fas fa-building"></i> Customer POC Overviews</h3>
-                        <p>Click any customer or POC to navigate directly to its test cases.</p>
+                        <h3><i class="fas fa-building"></i> Customer Bug Tracker Overviews</h3>
+                        <p>Click any customer or bug tracker to navigate directly to its test cases.</p>
                     </div>
                     <div class="customer-overview-grid" id="dashboardCustomerGrid">
-                        <!-- Dynamically populated with customer & POC cards -->
+                        <!-- Dynamically populated with customer & bug tracker cards -->
                     </div>
                 </div>
             </div>
@@ -112,7 +112,7 @@
                     <div class="view-actions">
                         <div id="customerAdminActions" style="display: none; align-items: center; gap: 8px;">
                             <button class="btn btn-primary" onclick="showAddPocModal()">
-                                <i class="fas fa-plus"></i> Add POC
+                                <i class="fas fa-plus"></i> Add Bug Tracker
                             </button>
                             <button class="btn btn-danger btn-sm" onclick="deleteCurrentCustomer()" title="Delete Customer">
                                 <i class="fas fa-trash"></i> Delete Customer
@@ -136,16 +136,16 @@
                 </div>
 
                 <div class="poc-grid" id="pocGrid">
-                    <!-- Dynamically populated with POC cards -->
+                    <!-- Dynamically populated with bug tracker cards -->
                 </div>
             </div>
 
-            <!-- POC / Test Cases Execution View -->
+            <!-- Bug Tracker / Test Cases Execution View -->
             <div id="pocView" class="view">
                 <div class="view-header">
                     <div>
                         <button class="btn btn-ghost btn-sm" onclick="showCustomer(currentCustomerId)">
-                            <i class="fas fa-arrow-left"></i> POCs
+                            <i class="fas fa-arrow-left"></i > Bug Trackers
                         </button>
                         <h2 id="pocTitle" class="inline-title"></h2>
                         <span class="badge" id="pocBadge"></span>
@@ -159,8 +159,8 @@
                             <button class="btn btn-primary" onclick="showAddTestCaseModal()">
                                 <i class="fas fa-plus"></i> Add Test Case
                             </button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteCurrentPoc()" title="Delete POC">
-                                <i class="fas fa-trash"></i> Delete POC
+                            <button class="btn btn-danger btn-sm" onclick="deleteCurrentPoc()" title="Delete Bug Tracker">
+                                <i class="fas fa-trash"></i> Delete Bug Tracker
                             </button>
                         </div>
                     </div>
@@ -203,7 +203,7 @@
                     </table>
                     <div class="empty-state" id="emptyTestCases" style="display:none;">
                         <i class="fas fa-clipboard-list"></i>
-                        <p>No test cases yet for this POC.</p>
+                        <p>No test cases yet for this bug tracker.</p>
                     </div>
                 </div>
             </div>
