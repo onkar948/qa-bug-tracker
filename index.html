@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POC Test Tracker</title>
+    <link rel="stylesheet" href="style.css?v=4">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left" onclick="showDashboard()" style="cursor: pointer;" title="Back to Dashboard">
+            <i class="fas fa-vial header-icon"></i>
+            <h1>POC Test Tracker</h1>
+        </div>
+        <div class="header-right">
+            <!-- Admin Tools (Revealed when Admin is active) -->
+            <div id="adminControls" style="display: none; align-items: center; gap: 8px;">
+                <button class="btn btn-header-accent" onclick="showAdminUploadModal()" title="Upload Excel to a Customer">
+                    <i class="fas fa-cloud-arrow-up"></i> Import Test Cases
+                </button>
+                <button class="btn btn-outline" onclick="exportAllDataJSON()" title="Backup all data to JSON">
+                    <i class="fas fa-download"></i> Backup
+                </button>
+                <label class="btn btn-outline" title="Restore from JSON backup">
+                    <i class="fas fa-upload"></i> Restore
+                    <input type="file" accept=".json" onchange="importAllDataJSON(event)" hidden>
+                </label>
+            </div>
+
+            <!-- Single Admin Toggle Button: Green when Active, Normal when Inactive -->
+            <button id="adminToggleBtn" class="btn btn-outline" onclick="toggleAdminMode()" title="Admin Login">
+                <i class="fas fa-lock" id="adminToggleIcon"></i> <span id="adminToggleText">Admin</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <!-- Dashboard Main Nav Tab -->
+            <div class="sidebar-nav">
+                <button class="sidebar-nav-btn active" id="navDashboardBtn" onclick="showDashboard()">
+                    <i class="fas fa-chart-pie"></i>
+                    <span>Dashboard</span>
+                </button>
+            </div>
+
+            <div class="sidebar-header">
+                <h2>Customers</h2>
+                <button class="btn btn-sm btn-primary" id="sidebarAddCustBtn" style="display: none;" onclick="showAddCustomerModal()" title="Add Customer">
+                    <i class="fas fa-plus"></i> Add
+                </button>
+            </div>
+            <div class="sidebar-list" id="customerList">
+                <!-- Dynamically populated -->
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main" id="mainContent">
+            <!-- Secure Portal Landing (Shown to visitors without ?c= link when not Admin) -->
+            <div id="portalLandingView" class="view">
+                <div class="welcome" style="max-width: 600px; margin: 60px auto;">
+                    <i class="fas fa-shield-halved welcome-icon" style="font-size: 64px; color: var(--primary);"></i>
+                    <h2>POC Test Portal</h2>
+                    <p>Welcome! Please use your company's dedicated POC access link to review test cases.</p>
+                    <div style="margin-top: 24px; background: white; padding: 24px; border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--gray-200);">
+                        <p style="font-size: 13px; font-weight: 500; color: var(--gray-600); margin-bottom: 10px;">Enter Customer Access Code or Admin Password:</p>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="password" id="manualAccessCodeInput" placeholder="••••••••" style="flex: 1; padding: 10px 14px; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 14px;" onkeypress="if(event.key==='Enter') submitAccessCode()">
+                            <button class="btn btn-primary" onclick="submitAccessCode()">Enter</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard (default view for Admin / customer-scoped dashboard) -->
+            <div id="dashboardView" class="view active">
+                <div class="welcome">
+                    <i class="fas fa-chart-line welcome-icon"></i>
+                    <h2>POC Test Tracker Dashboard</h2>
+                    <p>Overview of all active customer POCs and test execution progress.</p>
+                    <div class="stats-grid" id="dashboardStats"></div>
+                </div>
+
+                <div class="dashboard-sections">
+                    <div class="dashboard-section-header">
+                        <h3><i class="fas fa-building"></i> Customer POC Overviews</h3>
+                        <p>Click any customer or POC to navigate directly to its test cases.</p>
+                    </div>
+                    <div class="customer-overview-grid" id="dashboardCustomerGrid">
+                        <!-- Dynamically populated with customer & POC cards -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Customer View -->
+            <div id="customerView" class="view">
+                <div class="view-header">
+                    <div>
+                        <button class="btn btn-ghost btn-sm" onclick="showDashboard()">
+                            <i class="fas fa-arrow-left"></i> Dashboard
+                        </button>
+                        <h2 id="customerTitle" class="inline-title"></h2>
+                    </div>
+                    <div class="view-actions">
+                        <div id="customerAdminActions" style="display: none; align-items: center; gap: 8px;">
+                            <button class="btn btn-primary" onclick="showAddPocModal()">
+                                <i class="fas fa-plus"></i> Add POC
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteCurrentCustomer()" title="Delete Customer">
+                                <i class="fas fa-trash"></i> Delete Customer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin Shareable Link Box -->
+                <div id="customerLinkBar" style="display: none; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 8px; padding: 12px 18px; margin-bottom: 20px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 260px;">
+                        <i class="fas fa-link" style="color: var(--primary); font-size: 16px;"></i>
+                        <div>
+                            <div style="font-size: 13px; font-weight: 600; color: var(--gray-800);">Customer's Private Link (Competitors cannot see this):</div>
+                            <code id="customerLinkText" style="display: inline-block; background: white; padding: 4px 8px; border-radius: 4px; border: 1px solid #d1d5db; font-size: 12px; color: var(--primary); margin-top: 4px; word-break: break-all;"></code>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="copyCurrentCustomerLink()">
+                        <i class="fas fa-copy"></i> Copy Link
+                    </button>
+                </div>
+
+                <div class="poc-grid" id="pocGrid">
+                    <!-- Dynamically populated with POC cards -->
+                </div>
+            </div>
+
+            <!-- POC / Test Cases Execution View -->
+            <div id="pocView" class="view">
+                <div class="view-header">
+                    <div>
+                        <button class="btn btn-ghost btn-sm" onclick="showCustomer(currentCustomerId)">
+                            <i class="fas fa-arrow-left"></i> POCs
+                        </button>
+                        <h2 id="pocTitle" class="inline-title"></h2>
+                        <span class="badge" id="pocBadge"></span>
+                    </div>
+                    <div class="view-actions">
+                        <!-- Export is always visible to everyone -->
+                        <button class="btn btn-success" onclick="exportPocToExcel()" title="Export test results to Excel file">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </button>
+                        <div id="pocAdminActions" style="display: none; align-items: center; gap: 8px;">
+                            <button class="btn btn-primary" onclick="showAddTestCaseModal()">
+                                <i class="fas fa-plus"></i> Add Test Case
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteCurrentPoc()" title="Delete POC">
+                                <i class="fas fa-trash"></i> Delete POC
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="filters-bar">
+                    <div class="filter-group">
+                        <label>Status:</label>
+                        <select id="statusFilter" onchange="renderTestCases()">
+                            <option value="all">All</option>
+                            <option value="Pass">Pass</option>
+                            <option value="Fail">Fail</option>
+                            <option value="Blocked">Blocked</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Not Executed">Not Executed</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Module:</label>
+                        <select id="moduleFilter" onchange="renderTestCases()">
+                            <option value="all">All</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <input type="text" id="searchInput" placeholder="Search test cases..." oninput="renderTestCases()">
+                    </div>
+                    <div class="stats-mini" id="pocStats"></div>
+                </div>
+
+                <!-- Test Case Execution Table -->
+                <div class="table-container">
+                    <table class="test-table" id="testCaseTable">
+                        <thead id="testCaseHead">
+                            <!-- Populated dynamically based on Admin mode -->
+                        </thead>
+                        <tbody id="testCaseBody">
+                            <!-- Dynamically populated -->
+                        </tbody>
+                    </table>
+                    <div class="empty-state" id="emptyTestCases" style="display:none;">
+                        <i class="fas fa-clipboard-list"></i>
+                        <p>No test cases yet for this POC.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Overlay -->
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModal()">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="modalTitle">Add</h3>
+                <button class="btn btn-ghost" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Dynamic form -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" id="modalSaveBtn" onclick="modalSave()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="app.js?v=4"></script>
+</body>
+</html>
