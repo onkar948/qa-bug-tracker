@@ -784,23 +784,29 @@ function renderTestCases() {
 
     const tbody = document.getElementById('testCaseBody');
     const thead = document.getElementById('testCaseHead');
+    const colgroup = document.getElementById('testCaseColumns');
     const emptyMsg = document.getElementById('emptyTestCases');
     const table = document.getElementById('testCaseTable');
-
+    // Fit each column to its own visible content; do not distribute empty space.
+    const widths = columns.map(column => getAutoColumnWidth(filtered, column));
+    if (isAdmin) widths.push(92);
+    if (colgroup) {
+        colgroup.innerHTML = widths.map(width => `<col style="width:${width}px">`).join('');
+    }
+    table.style.width = `${widths.reduce((total, width) => total + width, 0)}px`;
     if (thead) {
         thead.innerHTML = `
             <tr>
-                ${columns.map((column, index) => {
-                    const width = Number(poc.columnWidths && poc.columnWidths[column]);
-                    return `<th data-column-index="${index}" ${width >= 72 ? `style="width:${width}px"` : ''}>
+                ${columns.map((column, index) => `
+                    <th class="${getColumnKind(column) === 'module' ? 'col-module' : ''}" data-column-index="${index}">
                         ${escHtml(column)}
-                        <span class="column-resizer" aria-hidden="true"></span>
-                    </th>`;
-                }).join('')}
+                        <span class="column-resizer" title="Drag to resize column" aria-label="Resize ${escHtml(column)} column"></span>
+                    </th>`).join('')}
                 ${isAdmin ? '<th class="col-actions">Actions</th>' : ''}
             </tr>
         `;
     }
+    attachColumnResizers(poc, columns);
 
     if (filtered.length === 0) {
         tbody.innerHTML = '';
@@ -828,7 +834,7 @@ function renderTestCases() {
                     if (kind === 'testNo') {
                         return `<td class="col-no" style="text-align:center;font-weight:600;color:var(--gray-600)">${escHtml(value)}</td>`;
                     }
-                    return `<td><div class="editable-cell" contenteditable="true" data-column="${escHtml(column)}" data-id="${tc.id}" onblur="onCellEdit(this)">${escHtml(value)}</div></td>`;
+                    return `<td class="${kind === 'module' ? 'col-module' : ''}"><div class="editable-cell" contenteditable="true" data-column="${escHtml(column)}" data-id="${tc.id}" onblur="onCellEdit(this)">${escHtml(value)}</div></td>`;
                 }).join('')}
                 ${isAdmin ? `
                 <td class="col-actions">
@@ -838,7 +844,6 @@ function renderTestCases() {
                 </td>` : ''}
             </tr>`;
         }).join('');
-        attachColumnResizers(poc, columns);
     }
 
     renderExecutionControls(poc);
@@ -863,6 +868,61 @@ function renderTestCases() {
     requestAnimationFrame(syncTestTableScrollProxy);
 }
 
+function attachColumnResizers(poc, columns) {
+    document.querySelectorAll('#testCaseHead .column-resizer').forEach(handle => {
+        handle.addEventListener('pointerdown', event => {
+            event.preventDefault();
+            const header = handle.parentElement;
+            const columnIndex = Number(header.dataset.columnIndex);
+            const column = columns[columnIndex];
+            const col = document.querySelectorAll('#testCaseColumns col')[columnIndex];
+            const startX = event.clientX;
+            const startWidth = col.getBoundingClientRect().width;
+            handle.classList.add('resizing');
+
+            const resize = moveEvent => {
+                const width = Math.max(72, Math.round(startWidth + moveEvent.clientX - startX));
+                col.style.width = `${width}px`;
+                const widths = [...document.querySelectorAll('#testCaseColumns col')];
+                document.getElementById('testCaseTable').style.width =
+                    `${widths.reduce((total, item) => total + item.getBoundingClientRect().width, 0)}px`;
+            };
+            const stopResize = () => {
+                document.removeEventListener('pointermove', resize);
+                document.removeEventListener('pointerup', stopResize);
+                handle.classList.remove('resizing');
+                requestAnimationFrame(syncTestTableScrollProxy);
+            };
+            document.addEventListener('pointermove', resize);
+            document.addEventListener('pointerup', stopResize, { once: true });
+        });
+    });
+}
+
+function getAutoColumnWidth(testCases, column) {
+    const table = document.getElementById('testCaseTable');
+    if (!table) return 160;
+    const kind = getColumnKind(column);
+    const minimum = kind === 'testNo' ? 76 : kind === 'status' ? 155 : 90;
+    const maximum = kind === 'testNo' ? 100 : kind === 'status' ? 185 :
+        kind === 'module' ? 260 : 300;
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) return minimum;
+    const font = getComputedStyle(table).fontFamily;
+    context.font = `600 12px ${font}`;
+    let required = context.measureText(String(column).toUpperCase()).width + 44;
+    context.font = `13px ${font}`;
+    for (const testCase of testCases) {
+        const text = String(getTestCaseValue(testCase, column) ?? '');
+        for (const line of text.split(/\r?\n/)) {
+            required = Math.max(required, context.measureText(line).width + 34);
+        }
+    }
+    // Width follows content, with a cap so lengthy descriptions wrap.
+    return Math.ceil(Math.min(maximum, Math.max(minimum, required)));
+}
+
 function syncTestTableScrollProxy() {
     const proxy = document.getElementById('testTableScrollProxy');
     const proxyContent = document.getElementById('testTableScrollProxyContent');
@@ -883,7 +943,10 @@ function syncTestTableScrollProxy() {
             proxy.scrollLeft = container.scrollLeft;
             tableScrollSyncing = false;
         });
-        window.addEventListener('resize', syncTestTableScrollProxy);
+        window.addEventListener('resize', () => {
+            if (currentPocId && !document.activeElement?.isContentEditable) renderTestCases();
+            syncTestTableScrollProxy();
+        });
         tableScrollProxyInitialized = true;
     }
 
@@ -925,39 +988,6 @@ function renderExecutionControls(poc) {
     </div>`;
 }
 
-function attachColumnResizers(poc, columns) {
-    document.querySelectorAll('#testCaseHead .column-resizer').forEach(handle => {
-        handle.addEventListener('pointerdown', event => {
-            event.preventDefault();
-            const header = handle.parentElement;
-            const columnIndex = Number(header.dataset.columnIndex);
-            const startX = event.clientX;
-            const startWidth = header.getBoundingClientRect().width;
-            handle.classList.add('resizing');
-
-            const resize = moveEvent => {
-                const width = Math.max(72, startWidth + moveEvent.clientX - startX);
-                header.style.width = `${width}px`;
-                document.querySelectorAll(`#testCaseTable tr`).forEach(row => {
-                    const cell = row.children[columnIndex];
-                    if (cell) cell.style.width = `${width}px`;
-                });
-            };
-            const stopResize = () => {
-                document.removeEventListener('pointermove', resize);
-                document.removeEventListener('pointerup', stopResize);
-                handle.classList.remove('resizing');
-                const width = Math.max(72, Math.round(header.getBoundingClientRect().width));
-                poc.columnWidths = poc.columnWidths || {};
-                poc.columnWidths[columns[columnIndex]] = width;
-                saveData();
-            };
-            document.addEventListener('pointermove', resize);
-            document.addEventListener('pointerup', stopResize, { once: true });
-        });
-    });
-}
-
 // ============================================================
 // INLINE EDITING
 // ============================================================
@@ -973,7 +1003,9 @@ function onCellEdit(el) {
         if (kind) tc[kind] = value;
         tc.values = tc.values || {};
         tc.values[column] = value;
+        if (poc.columnWidths) delete poc.columnWidths[column];
         saveData();
+        renderTestCases();
     }
 }
 
@@ -1200,7 +1232,7 @@ function executeExcelImport(file, customer) {
                 if (!rows.length) continue;
 
                 const pocColumn = detectPocColumn(headers);
-                const displayColumns = headers.filter(header => header !== pocColumn);
+                const displayColumns = headers;
                 if (workbook.SheetNames.length > 1) {
                     importPlans.push({ name: sheetName.trim() || 'Imported Feature', columns: displayColumns, rows });
                 } else if (pocColumn) {
