@@ -418,7 +418,7 @@ body {
 .table-scrollbar-proxy > div { height: 1px; }
 .test-table {
     width: max-content;
-    min-width: 100%;
+    min-width: 0;
     table-layout: fixed;
     border-collapse: collapse;
     font-size: 13px;
@@ -445,14 +445,14 @@ body {
     position: absolute;
     top: 0;
     right: 0;
-    width: 7px;
+    width: 8px;
     height: 100%;
     cursor: col-resize;
     touch-action: none;
     user-select: none;
 }
 .column-resizer:hover,
-.column-resizer.resizing { background: rgba(255,255,255,0.35); }
+.column-resizer.resizing { background: rgba(255, 255, 255, 0.35); }
 .test-table td {
     padding: 10px;
     border-bottom: 1px solid var(--gray-100);
@@ -460,15 +460,8 @@ body {
 }
 .test-table tbody tr:hover { background: var(--gray-50); }
 
-.col-no { width: 50px; text-align: center !important; }
-.col-module { width: 120px; }
-.col-scenario { min-width: 180px; }
-.col-step { min-width: 200px; }
-.col-expected { min-width: 180px; }
-.col-actual { min-width: 180px; }
-.col-comment { min-width: 140px; }
-.col-status { width: 130px; }
-.col-actions { width: 80px; text-align: center !important; }
+.col-no { text-align: center !important; }
+.col-actions { text-align: center !important; }
 
 .dashboard-feature-table {
     width: 100%;
@@ -702,3 +695,52 @@ body {
     .layout { flex-direction: column; }
     .sidebar { width: 100%; min-width: 100%; max-height: 200px; border-right: none; border-bottom: 1px solid var(--gray-200); }
 }
+
+/* Content-aware table widths: wrap long text and grow row height naturally. */
+#testCaseTable td { height: auto; overflow-wrap: anywhere; }
+#testCaseTable .editable-cell {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    height: auto;
+    min-width: 0;
+    max-width: 100%;
+}
+#testCaseTable th { overflow-wrap: normal; }
+
+/* Auto-fit text columns; allow full content to wrap and rows to expand. */
+#testCaseTable { table-layout: fixed; border-collapse: collapse; }
+#testCaseTable td { height: auto; vertical-align: top; }
+#testCaseTable .editable-cell {
+    display: block;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    height: auto;
+    min-height: 24px;
+    max-width: 100%;
+}
+#testCaseTable .status-select { max-width: 100%; }
+
+/* Text-based autofit: no forced full-width stretching. */
+#pocView .table-container { max-width: 100%; overflow-x: auto; }
+#testCaseTable { width: max-content; min-width: 0; table-layout: fixed; }
+#testCaseTable td { height: auto; vertical-align: top; }
+#testCaseTable .editable-cell {
+    display: block;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    max-width: 100%;
+    height: auto;
+}
+
+/* All columns: text-aware width, with wrapping and natural row heights */
+#testCaseTable { table-layout: fixed; width: max-content; border-collapse: collapse; }
+#testCaseTable td { white-space: normal; overflow-wrap: anywhere; height: auto; vertical-align: top; }
+#testCaseTable .editable-cell { white-space: pre-wrap; overflow-wrap: anywhere; height: auto; min-height: 24px; }
+#pocView .table-container { overflow-x: auto; }
+
+/* Compact columns: do not stretch to fill available screen width. */
+#testCaseTable th, #testCaseTable td { padding: 10px 8px; }
+#testCaseTable .editable-cell { padding: 2px 4px; }
