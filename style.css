@@ -599,7 +599,8 @@ body.signed-out > .layout { visibility: hidden; }
 .status-select.status-partially-pass { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
 .status-select.status-blocked { background: var(--blocked-bg); color: var(--blocked); border-color: var(--blocked); }
 .status-select.status-in-progress { background: var(--info-bg); color: var(--info); border-color: var(--info); }
-.status-select.status-not-executed { background: var(--gray-100); color: var(--gray-500); border-color: var(--gray-300); }
+.status-select.status-not-executed,
+.status-select.status-not-applicable { background: var(--gray-100); color: var(--gray-500); border-color: var(--gray-300); }
 
 /* Row actions */
 .row-actions { display: flex; gap: 4px; justify-content: center; }

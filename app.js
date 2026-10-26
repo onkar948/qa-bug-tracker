@@ -50,7 +50,8 @@ const DEFAULT_TEST_COLUMNS = [
     'Sr. No.', 'Module', 'Scenario', 'Execution Step',
     'Expected Behavior', 'Actual Behavior', 'Comment', 'Status'
 ];
-const FINAL_TEST_STATUSES = ['Pass', 'Fail', 'Partially Pass', 'Blocked'];
+const FINAL_TEST_STATUSES = ['Pass', 'Fail', 'Partially Pass', 'Blocked', 'Not Applicable'];
+const RESULT_TEST_STATUSES = ['Pass', 'Fail', 'Partially Pass', 'Blocked'];
 
 function normalizeHeader(header) {
     return String(header || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -682,7 +683,7 @@ function getPoc(customerId, pocId) {
 }
 
 function getTestCaseStats(testCases) {
-    const stats = { total: testCases.length, Pass: 0, Fail: 0, 'Partially Pass': 0, Blocked: 0, 'In Progress': 0, 'Not Executed': 0 };
+    const stats = { total: testCases.length, Pass: 0, Fail: 0, 'Partially Pass': 0, Blocked: 0, 'In Progress': 0, 'Not Executed': 0, 'Not Applicable': 0 };
     testCases.forEach(tc => { if (stats[tc.status] !== undefined) stats[tc.status]++; });
     return stats;
 }
@@ -802,7 +803,7 @@ function renderDashboard() {
                 name: p.name,
                 testCases: p.testCases.length,
                 executed: totalExecuted,
-                final: FINAL_TEST_STATUSES.reduce((count, status) => count + stats[status], 0),
+                final: RESULT_TEST_STATUSES.reduce((count, status) => count + stats[status], 0),
                 passed: stats.Pass,
                 defects: stats.Fail,
                 state: executionState
@@ -952,6 +953,7 @@ function renderPocGrid() {
                 <span class="poc-stat-badge badge-fail">${stats['Partially Pass']} Partially Pass</span>
                 <span class="poc-stat-badge badge-blocked" style="background:var(--blocked-bg);color:var(--blocked)">${stats.Blocked} Blocked</span>
                 <span class="poc-stat-badge badge-gray">${stats['Not Executed']} Pending</span>
+                <span class="poc-stat-badge badge-gray">${stats['Not Applicable']} Not Applicable</span>
             </div>
         </div>`;
     }).join('');
@@ -1032,10 +1034,11 @@ function renderTestCases() {
                             <option value="Fail" ${tc.status === 'Fail' ? 'selected' : ''}>Fail</option>
                             <option value="Partially Pass" ${tc.status === 'Partially Pass' ? 'selected' : ''}>Partially Pass</option>
                             <option value="Blocked" ${tc.status === 'Blocked' ? 'selected' : ''}>Blocked</option>
+                            <option value="Not Applicable" ${tc.status === 'Not Applicable' ? 'selected' : ''}>Not Applicable</option>
                         </select></td>`;
                     }
                     if (kind === 'testNo') {
-                        return `<td class="col-no" style="text-align:center;font-weight:600;color:var(--gray-600)">${escHtml(value)}</td>`;
+                        return `<td class="col-no" style="text-align:center;font-weight:600;color:var(--gray-600)"><div class="editable-cell" contenteditable="true" data-column="${escHtml(column)}" data-id="${tc.id}" onblur="onCellEdit(this)">${escHtml(value)}</div></td>`;
                     }
                     return `<td class="${kind === 'module' ? 'col-module' : ''}"><div class="editable-cell" contenteditable="true" data-column="${escHtml(column)}" data-id="${tc.id}" onblur="onCellEdit(this)">${escHtml(value)}</div></td>`;
                 }).join('')}
@@ -1062,6 +1065,7 @@ function renderTestCases() {
             <span class="badge" style="background:var(--blocked-bg);color:var(--blocked)">${allStats.Blocked} Blocked</span>
             <span class="badge badge-info">${allStats['In Progress']} In Prog</span>
             <span class="badge badge-gray">${allStats['Not Executed']} Pending</span>
+            <span class="badge badge-gray">${allStats['Not Applicable']} Not Applicable</span>
         `;
     }
     const pocBadge = document.getElementById('pocBadge');
@@ -1342,10 +1346,10 @@ function showAdminUploadModal() {
             </select>
         </div>
         <div class="form-group">
-            <label>Select Excel / CSV File (.xlsx, .xls, .csv)</label>
-            <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="padding: 6px;">
+            <label>Select file</label>
+            <input type="file" id="importFileInput" style="padding: 6px;">
             <p style="font-size:12px;color:var(--gray-500);margin-top:6px;">
-                        All rows and worksheets go into one module named after the file, inside the selected feature.
+                        Select any file. Spreadsheet files supported by the importer are read; all rows and worksheets go into one module named after the file, inside the selected feature.
             </p>
         </div>
     `, () => {
@@ -1354,7 +1358,7 @@ function showAdminUploadModal() {
         const file = fileInput.files[0];
 
         if (!file) {
-            toast('Please choose an Excel file to upload!', 'error');
+            toast('Please choose a file to upload.', 'error');
             return false;
         }
 
@@ -1442,8 +1446,12 @@ function executeExcelImport(file, customer) {
             toast(`Successfully imported ${importRows.length} test cases into one module: ${moduleName}.`, 'success');
         } catch (err) {
             console.error('Import error:', err);
-            toast('Error parsing Excel: ' + err.message, 'error');
+            toast('Unable to import this file. Choose a supported spreadsheet file. ' + err.message, 'error');
         }
+    };
+    reader.onerror = () => {
+        console.error('File read error:', reader.error);
+        toast('Unable to read the selected file.', 'error');
     };
     reader.readAsArrayBuffer(file);
 }
@@ -1502,6 +1510,7 @@ function detectColumns(headers) {
 
 function normalizeStatus(s) {
     const l = s.toLowerCase();
+    if (l.includes('not applicable') || l === 'n/a' || l === 'na') return 'Not Applicable';
     if (l.includes('partially pass')) return 'Partially Pass';
     if (l.includes('pass') || l === 'p' || l === 'yes' || l === 'ok') return 'Pass';
     if (l.includes('fail') || l === 'f' || l === 'no' || l === 'nok') return 'Fail';
@@ -1532,6 +1541,40 @@ function showAddCustomerModal() {
         renderSidebar();
         showCustomer(newCust.id);
         toast(`Feature "${name}" created! Link ready to share.`, 'success');
+    });
+}
+
+function renameCurrentCustomer() {
+    if (!isAdmin) {
+        toggleAdminMode();
+        return;
+    }
+    const customer = getCustomer(currentCustomerId);
+    if (!customer) {
+        toast('Feature not found.', 'error');
+        return;
+    }
+
+    openModal('Edit Feature Name', `
+        <div class="form-group">
+            <label for="editFeatureName">Feature Name</label>
+            <input type="text" id="editFeatureName" value="${escHtml(customer.name)}" maxlength="120" autofocus>
+        </div>
+    `, () => {
+        const input = document.getElementById('editFeatureName');
+        const name = input ? input.value.trim() : '';
+        if (!name) {
+            toast('Please enter a feature name.', 'error');
+            return false;
+        }
+        customer.name = name;
+        saveData();
+        renderSidebar();
+        renderDashboard();
+        if (currentCustomerId === customer.id) {
+            document.getElementById('customerTitle').textContent = customer.name;
+        }
+        toast('Feature name updated.', 'success');
     });
 }
 

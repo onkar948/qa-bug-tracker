@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QA Bug Tracker</title>
-    <link rel="stylesheet" href="style.css?v=17">
+    <link rel="stylesheet" href="style.css?v=18">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Firebase SDK -->
@@ -161,6 +161,9 @@
                     </div>
                     <div class="view-actions">
                         <div id="customerAdminActions" style="display: none; align-items: center; gap: 8px;">
+                            <button class="btn btn-outline" onclick="renameCurrentCustomer()" title="Edit Feature Name">
+                                <i class="fas fa-pen"></i> Edit Feature
+                            </button>
                             <button class="btn btn-primary" onclick="showAddPocModal()">
                                 <i class="fas fa-plus"></i> Add Module
                             </button>
@@ -229,6 +232,7 @@
                             <option value="Blocked">Blocked</option>
                             <option value="In Progress">In Progress</option>
                             <option value="Not Executed">Not Executed</option>
+                            <option value="Not Applicable">Not Applicable</option>
                         </select>
                     </div>
                     <div class="filter-group">
@@ -295,6 +299,6 @@
     <!-- Toast Notification -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="app.js?v=26"></script>
+    <script src="app.js?v=30"></script>
 </body>
 </html>
