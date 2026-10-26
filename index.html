@@ -114,8 +114,18 @@
 
                 <div class="dashboard-sections">
                     <div class="dashboard-section-header">
-                        <h3><i class="fas fa-table-list"></i> Module Execution Summary</h3>
-                        <p>Each module is classified by its execution state: not started, currently under test, or completed.</p>
+                        <div class="dashboard-summary-heading">
+                            <div>
+                                <h3><i class="fas fa-table-list"></i> Module Execution Summary</h3>
+                                <p>Each module is classified by its execution state: not started, currently under test, or completed.</p>
+                            </div>
+                            <div class="dashboard-feature-filter">
+                                <label for="dashboardFeatureSelect">Feature</label>
+                                <select id="dashboardFeatureSelect" onchange="setDashboardCustomerFilter(this.value)">
+                                    <option value="all">All Features</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="table-container">
                         <table class="dashboard-feature-table">
@@ -134,7 +144,7 @@
                         </table>
                         <div class="empty-state" id="emptyDashboardFeatures" style="display:none;">
                             <i class="fas fa-list-check"></i>
-                            <p>No module data available yet.</p>
+                            <p id="emptyDashboardFeaturesMessage">No module data available yet.</p>
                         </div>
                     </div>
                 </div>
@@ -215,6 +225,7 @@
                             <option value="all">All</option>
                             <option value="Pass">Pass</option>
                             <option value="Fail">Fail</option>
+                            <option value="Partially Pass">Partially Pass</option>
                             <option value="Blocked">Blocked</option>
                             <option value="In Progress">In Progress</option>
                             <option value="Not Executed">Not Executed</option>
@@ -284,6 +295,6 @@
     <!-- Toast Notification -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="app.js?v=21"></script>
+    <script src="app.js?v=26"></script>
 </body>
 </html>

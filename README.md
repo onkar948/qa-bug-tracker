@@ -20,13 +20,16 @@ When loading existing Firestore data, the app accepts customer records stored as
 
 ## Excel imports and test execution
 
-- Imported table headers follow the Excel sheet's column names. The importer searches the first 20 rows for the header row, allowing a title row above the column names. `Status` is required on every sheet; uploads without it are rejected.
+- Imported table headers follow the Excel sheet's column names. The importer searches the first 20 rows for the header row, allowing a title row above the column names. `Status` is required on every sheet; uploads without it are rejected. An upload must target an existing feature and appends all workbook rows to one module named after the file inside that feature. Uploads never create new features or split rows by the `Feature` or `Module` column; worksheets in the same workbook are combined into that module.
 - `Sr. No.` (or `Test No.`) values control the displayed test-case order and start a test case. Following rows with a blank serial number are merged into that test case, with non-empty cell values joined on separate lines; the continuation rows do not create extra test cases. Repeated serial values remain separate test cases, and a continuation row does not replace the test case's status.
 - Each test-case row shows its own status in the Status column. The status, module, and search filters can be used to find matching cases.
+- `Partially Pass` is available as a test-case status and is shown in red, like `Fail`.
 - All imported Excel columns are shown in the test-case table, including `Test Scenario`.
 - Table columns automatically size to their longest text without a fixed width cap and recalculate on render and after cell edits. Headers can also be dragged to temporarily adjust widths; automatic sizing applies again on the next render.
+- Test-case table column headers remain sticky while scrolling vertically through a module; the bottom scrollbar proxy continues to control horizontal table movement.
 - The dashboard's module summary counts only test cases with a populated `Sr. No.` (or `Test No.`), excluding continuation rows and repeated header rows.
 - Admin users can add or delete non-required columns.
 - Test execution must be started with **Start Execution**. It completes automatically when every test case is marked Pass, Fail, or Blocked.
 - The hierarchy is Feature → Module → Test Case. The dashboard summarizes each module's test-case count, execution percentage (cases no longer Not Executed), pass percentage (Pass among final-status cases), and failure count.
 - Dashboard module counts treat each module as one item: not started, currently under test, or completed. Click a module-status count to see matching modules grouped by feature.
+- The dashboard's Module Execution Summary can be filtered to one feature using its Feature dropdown; the All Features option restores the complete table.

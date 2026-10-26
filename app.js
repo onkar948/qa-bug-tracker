@@ -42,6 +42,7 @@ let activeCustomerKey = null;
 let tableScrollSyncing = false;
 let tableScrollProxyInitialized = false;
 let dashboardFeatureFilter = null;
+let dashboardCustomerFilter = 'all';
 let cloudUnsubscribe = null;
 let hasUnrecognizedCloudData = false;
 
@@ -49,7 +50,7 @@ const DEFAULT_TEST_COLUMNS = [
     'Sr. No.', 'Module', 'Scenario', 'Execution Step',
     'Expected Behavior', 'Actual Behavior', 'Comment', 'Status'
 ];
-const FINAL_TEST_STATUSES = ['Pass', 'Fail', 'Blocked'];
+const FINAL_TEST_STATUSES = ['Pass', 'Fail', 'Partially Pass', 'Blocked'];
 
 function normalizeHeader(header) {
     return String(header || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -681,7 +682,7 @@ function getPoc(customerId, pocId) {
 }
 
 function getTestCaseStats(testCases) {
-    const stats = { total: testCases.length, Pass: 0, Fail: 0, Blocked: 0, 'In Progress': 0, 'Not Executed': 0 };
+    const stats = { total: testCases.length, Pass: 0, Fail: 0, 'Partially Pass': 0, Blocked: 0, 'In Progress': 0, 'Not Executed': 0 };
     testCases.forEach(tc => { if (stats[tc.status] !== undefined) stats[tc.status]++; });
     return stats;
 }
@@ -720,6 +721,11 @@ function showDashboardFeatureFilter(state) {
 
 function clearDashboardFeatureFilter() {
     dashboardFeatureFilter = null;
+    renderDashboard();
+}
+
+function setDashboardCustomerFilter(customerId) {
+    dashboardCustomerFilter = customerId;
     renderDashboard();
 }
 
@@ -835,8 +841,23 @@ function renderDashboard() {
 
     const featureBody = document.getElementById('dashboardFeatureBody');
     const emptyFeatureState = document.getElementById('emptyDashboardFeatures');
+    const emptyFeatureMessage = document.getElementById('emptyDashboardFeaturesMessage');
+    const featureSelect = document.getElementById('dashboardFeatureSelect');
+    const visibleCustomers = getVisibleCustomers();
+    if (featureSelect) {
+        if (dashboardCustomerFilter !== 'all' &&
+            !visibleCustomers.some(customer => customer.id === dashboardCustomerFilter)) {
+            dashboardCustomerFilter = 'all';
+        }
+        featureSelect.innerHTML = '<option value="all">All Features</option>' + visibleCustomers.map(customer =>
+            `<option value="${escHtml(customer.id)}">${escHtml(customer.name)}</option>`
+        ).join('');
+        featureSelect.value = dashboardCustomerFilter;
+    }
     if (featureBody && emptyFeatureState) {
-        const featureRows = [...features].sort((a, b) =>
+        const featureRows = features.filter(feature =>
+            dashboardCustomerFilter === 'all' || feature.customerId === dashboardCustomerFilter
+        ).sort((a, b) =>
             a.customerName.localeCompare(b.customerName, undefined, { numeric: true }) ||
             a.name.localeCompare(b.name, undefined, { numeric: true })
         );
@@ -858,6 +879,11 @@ function renderDashboard() {
             </tr>`;
         }).join('');
         emptyFeatureState.style.display = featureRows.length ? 'none' : 'block';
+        if (emptyFeatureMessage) {
+            emptyFeatureMessage.textContent = dashboardCustomerFilter === 'all'
+                ? 'No module data available yet.'
+                : 'No module data available for this feature yet.';
+        }
     }
 
     // Render Customer & POC Navigation Cards on Dashboard
@@ -923,6 +949,7 @@ function renderPocGrid() {
             <div class="poc-stats-row">
                 <span class="poc-stat-badge badge-pass">${stats.Pass} Pass</span>
                 <span class="poc-stat-badge badge-fail">${stats.Fail} Fail</span>
+                <span class="poc-stat-badge badge-fail">${stats['Partially Pass']} Partially Pass</span>
                 <span class="poc-stat-badge badge-blocked" style="background:var(--blocked-bg);color:var(--blocked)">${stats.Blocked} Blocked</span>
                 <span class="poc-stat-badge badge-gray">${stats['Not Executed']} Pending</span>
             </div>
@@ -1003,6 +1030,7 @@ function renderTestCases() {
                             <option value="In Progress" ${tc.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
                             <option value="Pass" ${tc.status === 'Pass' ? 'selected' : ''}>Pass</option>
                             <option value="Fail" ${tc.status === 'Fail' ? 'selected' : ''}>Fail</option>
+                            <option value="Partially Pass" ${tc.status === 'Partially Pass' ? 'selected' : ''}>Partially Pass</option>
                             <option value="Blocked" ${tc.status === 'Blocked' ? 'selected' : ''}>Blocked</option>
                         </select></td>`;
                     }
@@ -1030,6 +1058,7 @@ function renderTestCases() {
         pocStatsEl.innerHTML = `
             <span class="badge badge-pass">${allStats.Pass} Pass</span>
             <span class="badge badge-fail">${allStats.Fail} Fail</span>
+            <span class="badge badge-fail">${allStats['Partially Pass']} Partially Pass</span>
             <span class="badge" style="background:var(--blocked-bg);color:var(--blocked)">${allStats.Blocked} Blocked</span>
             <span class="badge badge-info">${allStats['In Progress']} In Prog</span>
             <span class="badge badge-gray">${allStats['Not Executed']} Pending</span>
@@ -1109,13 +1138,8 @@ function syncTestTableScrollProxy() {
         proxy.addEventListener('scroll', () => {
             if (tableScrollSyncing) return;
             tableScrollSyncing = true;
-            container.scrollLeft = proxy.scrollLeft;
-            tableScrollSyncing = false;
-        });
-        container.addEventListener('scroll', () => {
-            if (tableScrollSyncing) return;
-            tableScrollSyncing = true;
-            proxy.scrollLeft = container.scrollLeft;
+            document.getElementById('testCaseTable').style.transform =
+                `translateX(-${proxy.scrollLeft}px)`;
             tableScrollSyncing = false;
         });
         window.addEventListener('resize', () => {
@@ -1129,6 +1153,7 @@ function syncTestTableScrollProxy() {
         document.getElementById('testCaseTable').style.display !== 'none' &&
         container.scrollWidth > container.clientWidth + 1;
     if (!visible) {
+        document.getElementById('testCaseTable').style.transform = '';
         proxy.style.display = 'none';
         return;
     }
@@ -1137,7 +1162,8 @@ function syncTestTableScrollProxy() {
     proxy.style.left = `${bounds.left}px`;
     proxy.style.width = `${bounds.width}px`;
     proxyContent.style.width = `${container.scrollWidth}px`;
-    proxy.scrollLeft = container.scrollLeft;
+    document.getElementById('testCaseTable').style.transform =
+        `translateX(-${proxy.scrollLeft}px)`;
     proxy.style.display = 'block';
 }
 
@@ -1300,28 +1326,26 @@ function showAdminUploadModal() {
         toggleAdminMode();
         return;
     }
+    if (db.customers.length === 0) {
+        toast('Create a feature first, then import the workbook into it.', 'error');
+        return;
+    }
     const customerOptions = db.customers.map(c => `
         <option value="${c.id}" ${c.id === currentCustomerId ? 'selected' : ''}>${escHtml(c.name)}</option>
     `).join('');
 
-    openModal('Import Test Cases from Excel', `
+    openModal('Import Excel into Feature', `
         <div class="form-group">
             <label>Target Feature</label>
-            <select id="importCustomerSelect" onchange="toggleNewCustomerInput(this.value)">
+            <select id="importCustomerSelect">
                 ${customerOptions}
-                <option value="__NEW__">+ Create New Feature...</option>
             </select>
-        </div>
-        <div class="form-group" id="newCustomerGroup" style="${db.customers.length === 0 ? '' : 'display:none;'}">
-            <label>New Feature Name</label>
-            <input type="text" id="importNewCustomerName" placeholder="e.g. Inventory">
         </div>
         <div class="form-group">
             <label>Select Excel / CSV File (.xlsx, .xls, .csv)</label>
             <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="padding: 6px;">
             <p style="font-size:12px;color:var(--gray-500);margin-top:6px;">
-                        💡 <b>Multi-sheet files:</b> Each sheet becomes a module.<br>
-                        💡 <b>Single sheet:</b> Uses Module column or file name as module.
+                        All rows and worksheets go into one module named after the file, inside the selected feature.
             </p>
         </div>
     `, () => {
@@ -1334,21 +1358,9 @@ function showAdminUploadModal() {
             return false;
         }
 
-        let targetCustomer = null;
-        if (select.value === '__NEW__' || db.customers.length === 0) {
-            const newName = document.getElementById('importNewCustomerName').value.trim();
-            if (!newName) {
-                toast('Please enter a name for the new feature!', 'error');
-                return false;
-            }
-            const slug = newName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'client';
-            targetCustomer = { id: genId(), name: newName, accessKey: `${slug}_${Math.random().toString(36).substring(2, 7)}`, pocs: [] };
-        } else {
-            targetCustomer = getCustomer(select.value);
-        }
-
+        const targetCustomer = getCustomer(select.value);
         if (!targetCustomer) {
-            toast('Feature not found', 'error');
+            toast('Select an existing feature before importing.', 'error');
             return false;
         }
 
@@ -1356,17 +1368,6 @@ function showAdminUploadModal() {
         return true;
     });
 
-    if (db.customers.length === 0) {
-        document.getElementById('importCustomerSelect').value = '__NEW__';
-        document.getElementById('newCustomerGroup').style.display = 'block';
-    }
-}
-
-function toggleNewCustomerInput(val) {
-    const grp = document.getElementById('newCustomerGroup');
-    if (grp) {
-        grp.style.display = val === '__NEW__' ? 'block' : 'none';
-    }
 }
 
 function executeExcelImport(file, customer) {
@@ -1374,7 +1375,8 @@ function executeExcelImport(file, customer) {
     reader.onload = function (e) {
         try {
             const workbook = XLSX.read(e.target.result, { type: 'array' });
-            const importPlans = [];
+            const importColumns = [];
+            const importRows = [];
             for (const sheetName of workbook.SheetNames) {
                 const sheet = workbook.Sheets[sheetName];
                 const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
@@ -1406,53 +1408,38 @@ function executeExcelImport(file, customer) {
                     });
                 if (!rows.length) continue;
 
-                const pocColumn = detectPocColumn(headers);
-                const displayColumns = headers;
-                if (workbook.SheetNames.length > 1) {
-                    importPlans.push({ name: sheetName.trim() || 'Imported Feature', columns: displayColumns, rows });
-                } else if (pocColumn) {
-                    const groups = new Map();
-                    rows.forEach(row => {
-                        const pocName = String(row[pocColumn] || 'Default POC').trim() || 'Default POC';
-                        if (!groups.has(pocName)) groups.set(pocName, []);
-                        groups.get(pocName).push(row);
-                    });
-                    groups.forEach((groupRows, name) => importPlans.push({ name, columns: displayColumns, rows: groupRows }));
-                } else {
-                    const name = file.name.replace(/\.(xlsx|xls|csv)$/i, '').trim() || 'Imported Feature';
-                    importPlans.push({ name, columns: displayColumns, rows });
-                }
+                headers.forEach(header => {
+                    if (!importColumns.includes(header)) importColumns.push(header);
+                });
+                importRows.push(...rows);
             }
-            if (!importPlans.length) {
+            if (!importRows.length) {
                 toast('Excel file contains no test cases to import.', 'error');
                 return;
             }
 
+            const moduleName = file.name.replace(/\.(xlsx|xls|csv)$/i, '').trim() || 'Imported Module';
             if (!db.customers.some(existing => existing.id === customer.id)) {
                 db.customers.push(customer);
             }
-            let totalAdded = 0;
-            importPlans.forEach(plan => {
-                const poc = createOrGetPoc(customer, plan.name, plan.columns);
-                const colMap = detectColumns(plan.columns);
-                const mergedColumns = Array.isArray(poc.columns) && poc.columns.length
-                    ? [...poc.columns]
-                    : poc.testCases.length ? [...DEFAULT_TEST_COLUMNS] : [...plan.columns];
-                plan.columns.forEach(column => {
-                    if (!mergedColumns.includes(column)) mergedColumns.push(column);
-                });
-                poc.columns = mergedColumns;
-                plan.rows.forEach((row, index) => {
-                    poc.testCases.push(rowToTestCase(row, colMap, poc.testCases.length + index + 1, plan.columns));
-                    totalAdded++;
-                });
-                updateExecutionState(poc);
+            const poc = createOrGetPoc(customer, moduleName, importColumns);
+            const colMap = detectColumns(importColumns);
+            const mergedColumns = Array.isArray(poc.columns) && poc.columns.length
+                ? [...poc.columns]
+                : poc.testCases.length ? [...DEFAULT_TEST_COLUMNS] : [...importColumns];
+            importColumns.forEach(column => {
+                if (!mergedColumns.includes(column)) mergedColumns.push(column);
             });
+            poc.columns = mergedColumns;
+            importRows.forEach((row, index) => {
+                poc.testCases.push(rowToTestCase(row, colMap, poc.testCases.length + index + 1, importColumns));
+            });
+            updateExecutionState(poc);
 
             saveData();
             showCustomer(customer.id);
             renderSidebar();
-            toast(`Successfully imported ${totalAdded} test cases across ${importPlans.length} module(s)!`, 'success');
+            toast(`Successfully imported ${importRows.length} test cases into one module: ${moduleName}.`, 'success');
         } catch (err) {
             console.error('Import error:', err);
             toast('Error parsing Excel: ' + err.message, 'error');
@@ -1492,16 +1479,6 @@ function createOrGetPoc(customer, pocName, columns) {
     return poc;
 }
 
-function detectPocColumn(headers) {
-    const lower = headers.map(h => h.toLowerCase());
-    const keywords = ['module', 'feature', 'poc', 'proof of concept', 'project', 'poc name', 'poc_name'];
-    for (const kw of keywords) {
-        const idx = lower.findIndex(h => h.includes(kw));
-        if (idx !== -1) return headers[idx];
-    }
-    return null;
-}
-
 function detectColumns(headers) {
     const lower = headers.map(h => h.toLowerCase());
     function find(keywords) {
@@ -1525,6 +1502,7 @@ function detectColumns(headers) {
 
 function normalizeStatus(s) {
     const l = s.toLowerCase();
+    if (l.includes('partially pass')) return 'Partially Pass';
     if (l.includes('pass') || l === 'p' || l === 'yes' || l === 'ok') return 'Pass';
     if (l.includes('fail') || l === 'f' || l === 'no' || l === 'nok') return 'Fail';
     if (l.includes('block')) return 'Blocked';
