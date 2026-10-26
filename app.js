@@ -27,7 +27,9 @@ const firebaseConfig = {
 // ---------- Firebase Init ----------
 firebase.initializeApp(firebaseConfig);
 const firestore = firebase.firestore();
+const firebaseAuth = firebase.auth();
 const DB_DOC = firestore.collection('pocTracker').doc('mainData');
+const TRACKER_ADMIN_EMAIL = 'onkar.joshi@infoteksoftware.com';
 
 // ---------- State ----------
 let db = { customers: [] };
@@ -35,11 +37,13 @@ let currentCustomerId = null;
 let currentPocId = null;
 let modalCallback = null;
 let isLoading = true;
-let isAdmin = sessionStorage.getItem('isAdmin') === 'true';
+let isAdmin = false;
 let activeCustomerKey = null;
 let tableScrollSyncing = false;
 let tableScrollProxyInitialized = false;
 let dashboardFeatureFilter = null;
+let cloudUnsubscribe = null;
+let hasUnrecognizedCloudData = false;
 
 const DEFAULT_TEST_COLUMNS = [
     'Sr. No.', 'Module', 'Scenario', 'Execution Step',
@@ -179,18 +183,7 @@ function submitAccessCode() {
     if (!input || !input.value.trim()) return;
     const code = input.value.trim();
 
-    // 1. Check if user entered Admin Password
-    if (code === 'Pa$$word') {
-        isAdmin = true;
-        sessionStorage.setItem('isAdmin', 'true');
-        input.value = '';
-        updateAdminUI();
-        refreshCurrentView();
-        toast('Admin access granted! All features unlocked.', 'success');
-        return;
-    }
-
-    // 2. Check if user entered Feature Access Code
+    // Check if user entered a Feature Access Code.
     const found = db.customers.find(c => c.accessKey === code || c.id === code || (c.name && c.name.toLowerCase() === code.toLowerCase()));
     if (found) {
         activeCustomerKey = found.accessKey;
@@ -204,36 +197,21 @@ function submitAccessCode() {
     }
 }
 
-// ---------- Admin Password Management ----------
+// ---------- Admin Access ----------
 function toggleAdminMode() {
-    if (isAdmin) {
-        isAdmin = false;
-        sessionStorage.removeItem('isAdmin');
-        updateAdminUI();
-        toast('Admin mode deactivated.', 'info');
-    } else {
-        openModal('Admin Authentication', `
-            <div class="form-group">
-                <label>Enter Admin Password</label>
-                <input type="password" id="adminPasswordInput" placeholder="Password" autofocus>
-                <p style="font-size:12px; color:var(--gray-500); margin-top:6px;">
-                    Unlocks Import Test Cases, Add Modules/Test Cases, and Delete options.
-                </p>
-            </div>
-        `, () => {
-            const input = document.getElementById('adminPasswordInput');
-            if (input && input.value === 'Pa$$word') {
-                isAdmin = true;
-                sessionStorage.setItem('isAdmin', 'true');
-                updateAdminUI();
-                toast('Admin mode activated! Tools unlocked.', 'success');
-                return true;
-            } else {
-                toast('Incorrect password! Access denied.', 'error');
-                return false;
-            }
-        });
+    if (!isAuthorizedTrackerAdmin(firebaseAuth.currentUser)) {
+        toast('Admin access is available only to the authorized signed-in account.', 'error');
+        return;
     }
+    isAdmin = !isAdmin;
+    updateAdminUI();
+    refreshCurrentView();
+    toast(isAdmin ? 'Admin mode activated.' : 'Admin mode deactivated.', 'info');
+}
+
+function isAuthorizedTrackerAdmin(user) {
+    return Boolean(user && user.emailVerified && user.email
+        && user.email.toLowerCase() === TRACKER_ADMIN_EMAIL);
 }
 
 function updateAdminUI() {
@@ -277,6 +255,9 @@ function updateAdminUI() {
 // ---------- Init ----------
 document.addEventListener('DOMContentLoaded', () => {
     detectCustomerFromURL();
+    const signInForm = document.getElementById('signInForm');
+    if (signInForm) signInForm.addEventListener('submit', signInToCloud);
+
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('demo') === '1' || urlParams.get('demo') === '2') {
         db = {
@@ -307,6 +288,8 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         isLoading = false;
         isAdmin = urlParams.get('admin') === '1';
+        document.body.classList.remove('signed-out');
+        document.getElementById('authView').hidden = true;
         renderSidebar();
         if (urlParams.get('demo') === '2') {
             showDashboard();
@@ -316,27 +299,141 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAdminUI();
         return;
     }
-    loadDataFromCloud();
+
+    firebaseAuth.onAuthStateChanged((user) => {
+        const authView = document.getElementById('authView');
+        const signOutBtn = document.getElementById('signOutBtn');
+        if (!user) {
+            if (cloudUnsubscribe) {
+                cloudUnsubscribe();
+                cloudUnsubscribe = null;
+            }
+            db = { customers: [] };
+            isAdmin = false;
+            document.body.classList.add('signed-out');
+            if (authView) authView.hidden = false;
+            if (signOutBtn) signOutBtn.hidden = true;
+            isLoading = true;
+            return;
+        }
+
+        if (!user.emailVerified) {
+            isAdmin = false;
+            document.body.classList.add('signed-out');
+            if (authView) authView.hidden = false;
+            if (signOutBtn) signOutBtn.hidden = true;
+            showAuthError('Verify your email address before accessing cloud data.');
+            isLoading = true;
+            return;
+        }
+
+        isAdmin = isAuthorizedTrackerAdmin(user);
+        if (isAdmin) {
+            activeCustomerKey = null;
+        }
+        document.body.classList.remove('signed-out');
+        if (authView) authView.hidden = true;
+        if (signOutBtn) signOutBtn.hidden = false;
+        updateAdminUI();
+        loadDataFromCloud();
+    }, (error) => {
+        console.error('Firebase authentication state error:', error);
+        showAuthError(error.message);
+    });
 });
+
+async function signInToCloud(event) {
+    event.preventDefault();
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    const signInBtn = document.getElementById('signInBtn');
+    showAuthError('');
+    signInBtn.disabled = true;
+    try {
+        const credential = await firebaseAuth.signInWithEmailAndPassword(email, password);
+        if (!credential.user.emailVerified) {
+            await credential.user.sendEmailVerification();
+            await firebaseAuth.signOut();
+            showAuthError('A verification link was sent to your email. Verify it, then sign in again.');
+        }
+    } catch (error) {
+        console.error('Firebase sign-in error:', error);
+        showAuthError(error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found'
+            ? 'Email or password is incorrect.'
+            : error.message);
+    } finally {
+        signInBtn.disabled = false;
+    }
+}
+
+function showAuthError(message) {
+    const errorElement = document.getElementById('authError');
+    if (!errorElement) return;
+    errorElement.textContent = message;
+    errorElement.hidden = !message;
+}
+
+async function signOutOfCloud() {
+    try {
+        await firebaseAuth.signOut();
+    } catch (error) {
+        console.error('Firebase sign-out error:', error);
+        toast('Unable to sign out: ' + error.message, 'error');
+    }
+}
 
 // ============================================================
 // DATA PERSISTENCE (Firebase Firestore)
 // ============================================================
 function loadDataFromCloud() {
+    if (cloudUnsubscribe) cloudUnsubscribe();
     // Real-time listener: auto-syncs when anyone makes changes
-    DB_DOC.onSnapshot((doc) => {
+    cloudUnsubscribe = DB_DOC.onSnapshot((doc) => {
         if (doc.exists) {
-            db = doc.data();
-            if (!db.customers) db.customers = [];
+            const cloudData = doc.data();
+            const rawCustomers = Array.isArray(cloudData.customers)
+                ? cloudData.customers
+                : cloudData.id || cloudData.pocs
+                    ? [cloudData]
+                    : null;
+            if (!rawCustomers) {
+                console.error('Unexpected Firestore data shape:', cloudData);
+                toast('Cloud data was found, but its format is not recognized. No data was changed.', 'error');
+                isLoading = false;
+                refreshCurrentView();
+                return;
+            }
+
+            const normalized = normalizeCloudCustomers(rawCustomers);
+            if (normalized.customers.length === 0 && rawCustomers.some(value => String(value ?? '').trim())) {
+                console.error('Firestore customer entries could not be normalized:', cloudData);
+                hasUnrecognizedCloudData = true;
+                toast('Cloud data was found, but its feature entries could not be read. No data was changed.', 'error');
+                isLoading = false;
+                refreshCurrentView();
+                return;
+            }
+            db = { ...cloudData, customers: normalized.customers };
+            hasUnrecognizedCloudData = normalized.ignoredEntries > 0;
+            if (normalized.ignoredEntries > 0) {
+                console.warn(`Found ${normalized.ignoredEntries} unrecognized non-empty Firestore entr${normalized.ignoredEntries === 1 ? 'y' : 'ies'}. Cloud writes are paused to protect the original data.`);
+                toast('Some saved cloud entries could not be read. Cloud writes are paused to protect your data.', 'error');
+            } else {
+                hasUnrecognizedCloudData = false;
+            }
         } else {
+            hasUnrecognizedCloudData = false;
             db = { customers: [] };
-            DB_DOC.set(db).catch(e => console.warn('Init set error:', e));
+            DB_DOC.set(db).catch(e => {
+                console.error('Firestore initialization error:', e);
+                toast(getCloudPermissionMessage(e, 'Unable to initialize cloud data.'), 'error');
+            });
         }
         isLoading = false;
         refreshCurrentView();
     }, (error) => {
         console.error('Firebase snapshot error:', error);
-        toast('Cloud sync notice: ' + error.message, 'error');
+        toast(getCloudPermissionMessage(error, 'Cloud sync notice: ' + error.message), 'error');
         // Fallback to localStorage if offline
         const stored = localStorage.getItem('pocTestTracker');
         if (stored) {
@@ -347,11 +444,89 @@ function loadDataFromCloud() {
     });
 }
 
+function normalizeCloudCustomers(rawCustomers) {
+    const customers = [];
+    let ignoredEntries = 0;
+
+    rawCustomers.forEach((rawCustomer, customerIndex) => {
+        const customer = parseCloudValue(rawCustomer);
+        if (!customer || typeof customer !== 'object' || Array.isArray(customer) || !Array.isArray(customer.pocs)) {
+            if (String(rawCustomer ?? '').trim()) ignoredEntries++;
+            return;
+        }
+
+        const pocs = [];
+        customer.pocs.forEach((rawPoc, pocIndex) => {
+            const poc = parseCloudValue(rawPoc);
+            if (!poc || typeof poc !== 'object' || Array.isArray(poc)) {
+                if (String(rawPoc ?? '').trim()) ignoredEntries++;
+                return;
+            }
+
+            const testCases = [];
+            if (Array.isArray(poc.testCases)) {
+                poc.testCases.forEach(rawTestCase => {
+                    const testCase = parseCloudValue(rawTestCase);
+                    if (testCase && typeof testCase === 'object' && !Array.isArray(testCase)) {
+                        testCases.push(testCase);
+                    } else if (String(rawTestCase ?? '').trim()) {
+                        ignoredEntries++;
+                    }
+                });
+            }
+            pocs.push({
+                ...poc,
+                id: poc.id ? String(poc.id) : genId(),
+                name: String(poc.name || poc.moduleName || `Module ${pocIndex + 1}`),
+                columns: Array.isArray(poc.columns) ? poc.columns : [],
+                testCases
+            });
+        });
+
+        customers.push({
+            ...customer,
+            id: customer.id ? String(customer.id) : genId(),
+            name: String(customer.name || customer.customerName || customer.featureName || `Imported Feature ${customerIndex + 1}`),
+            pocs
+        });
+    });
+
+    return { customers, ignoredEntries };
+}
+
+function parseCloudValue(value) {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    try {
+        return JSON.parse(trimmed);
+    } catch (error) {
+        return null;
+    }
+}
+
+function getCloudPermissionMessage(error, fallback) {
+    if (error && (error.code === 'permission-denied' || error.code === 'firestore/permission-denied')) {
+        return 'Cloud access denied. Sign in with an authorized account and publish the Firestore rules from firestore.rules.';
+    }
+    return fallback;
+}
+
 function saveData() {
     // Save to Firestore
+    if (!firebaseAuth.currentUser) {
+        localStorage.setItem('pocTestTracker', JSON.stringify(db));
+        toast('Sign in to sync changes to the cloud.', 'error');
+        return;
+    }
+    if (hasUnrecognizedCloudData) {
+        localStorage.setItem('pocTestTracker', JSON.stringify(db));
+        toast('Cloud save paused to protect entries that could not be read. Correct the Firestore data format before saving.', 'error');
+        return;
+    }
     DB_DOC.set(JSON.parse(JSON.stringify(db))).catch(err => {
         console.error('Save error:', err);
-        toast('Error saving to cloud! Check Firestore rules.', 'error');
+        toast(getCloudPermissionMessage(err, 'Error saving to cloud: ' + err.message), 'error');
     });
     // Also backup locally
     localStorage.setItem('pocTestTracker', JSON.stringify(db));

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QA Bug Tracker</title>
-    <link rel="stylesheet" href="style.css?v=16">
+    <link rel="stylesheet" href="style.css?v=17">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Firebase SDK -->
@@ -12,7 +12,20 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 </head>
-<body>
+<body class="signed-out">
+    <main id="authView" class="auth-view">
+        <form id="signInForm" class="auth-card">
+            <i class="fas fa-cloud auth-icon"></i>
+            <h2>Sign in to QA Bug Tracker</h2>
+            <p>Use an account provisioned by your tracker administrator.</p>
+            <label for="authEmail">Email</label>
+            <input id="authEmail" name="email" type="email" autocomplete="username" required>
+            <label for="authPassword">Password</label>
+            <input id="authPassword" name="password" type="password" autocomplete="current-password" required>
+            <p id="authError" class="auth-error" role="alert" hidden></p>
+            <button id="signInBtn" class="btn btn-primary" type="submit">Sign in</button>
+        </form>
+    </main>
     <!-- Header -->
     <header class="header">
         <div class="header-left" onclick="showDashboard()" style="cursor: pointer;" title="Back to Dashboard">
@@ -38,6 +51,7 @@
             <button id="adminToggleBtn" class="btn btn-outline" onclick="toggleAdminMode()" title="Admin Login">
                 <i class="fas fa-lock" id="adminToggleIcon"></i> <span id="adminToggleText">Admin</span>
             </button>
+            <button id="signOutBtn" class="btn btn-outline" type="button" onclick="signOutOfCloud()" hidden>Sign out</button>
         </div>
     </header>
 
@@ -72,7 +86,7 @@
                     <h2>QA Bug Tracker Portal</h2>
                     <p>Welcome! Please use your company's dedicated QA Bug Tracker access link to review test cases.</p>
                     <div style="margin-top: 24px; background: white; padding: 24px; border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--gray-200);">
-                        <p style="font-size: 13px; font-weight: 500; color: var(--gray-600); margin-bottom: 10px;">Enter Feature Access Code or Admin Password:</p>
+                        <p style="font-size: 13px; font-weight: 500; color: var(--gray-600); margin-bottom: 10px;">Enter your Feature Access Code:</p>
                         <div style="display: flex; gap: 8px;">
                             <input type="password" id="manualAccessCodeInput" placeholder="••••••••" style="flex: 1; padding: 10px 14px; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 14px;" onkeypress="if(event.key==='Enter') submitAccessCode()">
                             <button class="btn btn-primary" onclick="submitAccessCode()">Enter</button>
@@ -270,6 +284,6 @@
     <!-- Toast Notification -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="app.js?v=18"></script>
+    <script src="app.js?v=21"></script>
 </body>
 </html>
