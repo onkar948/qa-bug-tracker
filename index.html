@@ -210,6 +210,9 @@
                         </button>
                         <div id="pocExecutionControl"></div>
                         <div id="pocAdminActions" style="display: none; align-items: center; gap: 8px;">
+                            <button class="btn btn-outline" onclick="renameCurrentPoc()" title="Edit Module Name">
+                                <i class="fas fa-pen"></i> Edit Module
+                            </button>
                             <button class="btn btn-primary" onclick="showAddTestCaseModal()">
                                 <i class="fas fa-plus"></i> Add Test Case
                             </button>
@@ -299,6 +302,6 @@
     <!-- Toast Notification -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="app.js?v=30"></script>
+    <script src="app.js?v=33"></script>
 </body>
 </html>

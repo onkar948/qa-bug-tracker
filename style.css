@@ -392,7 +392,9 @@ body.signed-out > .layout { visibility: hidden; }
     border: 2px solid transparent;
 }
 .poc-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: var(--shadow-lg); }
-.poc-card h3 { font-size: 16px; margin-bottom: 8px; color: var(--gray-800); }
+.poc-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.poc-card h3 { font-size: 16px; color: var(--gray-800); }
+.poc-card-heading .btn { flex-shrink: 0; }
 .poc-card .poc-meta { display: flex; gap: 16px; font-size: 13px; color: var(--gray-500); }
 .poc-card .progress-bar {
     margin-top: 12px;

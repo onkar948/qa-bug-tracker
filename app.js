@@ -108,6 +108,17 @@ function isFinalTestStatus(status) {
     return FINAL_TEST_STATUSES.includes(status);
 }
 
+function hasTestCaseResults(testCase, columns) {
+    const expectedColumn = columns.find(column => getColumnKind(column) === 'expectedBehavior');
+    const actualColumn = columns.find(column => getColumnKind(column) === 'actualBehavior');
+    return Boolean(
+        expectedColumn &&
+        actualColumn &&
+        String(getTestCaseValue(testCase, expectedColumn) ?? '').trim() &&
+        String(getTestCaseValue(testCase, actualColumn) ?? '').trim()
+    );
+}
+
 function updateExecutionState(poc) {
     if (!poc.executionStartedAt) return;
     const complete = poc.testCases.length > 0 && poc.testCases.every(testCase => isFinalTestStatus(testCase.status));
@@ -941,7 +952,10 @@ function renderPocGrid() {
         const progressClass = passRate >= 70 ? 'good' : passRate >= 40 ? 'medium' : 'bad';
         return `
         <div class="poc-card" onclick="showPoc('${customer.id}', '${poc.id}')">
-            <h3><i class="fas fa-flask" style="color:var(--primary);margin-right:6px;"></i>${escHtml(poc.name)}</h3>
+            <div class="poc-card-heading">
+                <h3><i class="fas fa-flask" style="color:var(--primary);margin-right:6px;"></i>${escHtml(poc.name)}</h3>
+                ${isAdmin ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); renamePoc('${customer.id}', '${poc.id}')" title="Edit Module Name"><i class="fas fa-pen"></i> Edit</button>` : ''}
+            </div>
             <div class="poc-meta">
                 <span><i class="fas fa-list-check"></i> ${stats.total} test cases</span>
                 <span><i class="fas fa-chart-pie"></i> ${passRate}% pass rate</span>
@@ -1027,7 +1041,11 @@ function renderTestCases() {
                     const kind = getColumnKind(column);
                     const value = String(getTestCaseValue(tc, column) ?? '');
                     if (kind === 'status') {
-                        return `<td><select class="status-select ${statusClass}" data-id="${tc.id}" onchange="onStatusChange(this)" ${poc.executionStartedAt ? '' : 'disabled title="Start execution to update test statuses"'}>
+                        const statusEnabled = poc.executionStartedAt && hasTestCaseResults(tc, columns);
+                        const statusDisabledTitle = !poc.executionStartedAt
+                            ? 'Start execution to update test statuses'
+                            : 'Fill Expected Result and Actual Result to enable status';
+                        return `<td><select class="status-select ${statusClass}" data-id="${tc.id}" onchange="onStatusChange(this)" ${statusEnabled ? '' : `disabled title="${statusDisabledTitle}"`}>
                             <option value="Not Executed" ${tc.status === 'Not Executed' ? 'selected' : ''}>Not Executed</option>
                             <option value="In Progress" ${tc.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
                             <option value="Pass" ${tc.status === 'Pass' ? 'selected' : ''}>Pass</option>
@@ -1136,14 +1154,14 @@ function syncTestTableScrollProxy() {
     const proxyContent = document.getElementById('testTableScrollProxyContent');
     const container = document.querySelector('#pocView .table-container');
     const pocView = document.getElementById('pocView');
-    if (!proxy || !proxyContent || !container || !pocView) return;
+    const table = document.getElementById('testCaseTable');
+    if (!proxy || !proxyContent || !container || !pocView || !table) return;
 
     if (!tableScrollProxyInitialized) {
         proxy.addEventListener('scroll', () => {
             if (tableScrollSyncing) return;
             tableScrollSyncing = true;
-            document.getElementById('testCaseTable').style.transform =
-                `translateX(-${proxy.scrollLeft}px)`;
+            table.style.transform = `translateX(-${proxy.scrollLeft}px)`;
             tableScrollSyncing = false;
         });
         window.addEventListener('resize', () => {
@@ -1154,10 +1172,10 @@ function syncTestTableScrollProxy() {
     }
 
     const visible = pocView.classList.contains('active') &&
-        document.getElementById('testCaseTable').style.display !== 'none' &&
-        container.scrollWidth > container.clientWidth + 1;
+        table.style.display !== 'none' &&
+        table.offsetWidth > container.clientWidth + 1;
     if (!visible) {
-        document.getElementById('testCaseTable').style.transform = '';
+        table.style.transform = '';
         proxy.style.display = 'none';
         return;
     }
@@ -1165,10 +1183,11 @@ function syncTestTableScrollProxy() {
     const bounds = container.getBoundingClientRect();
     proxy.style.left = `${bounds.left}px`;
     proxy.style.width = `${bounds.width}px`;
-    proxyContent.style.width = `${container.scrollWidth}px`;
-    document.getElementById('testCaseTable').style.transform =
-        `translateX(-${proxy.scrollLeft}px)`;
+    proxyContent.style.width = `${table.offsetWidth}px`;
     proxy.style.display = 'block';
+    proxy.scrollLeft = Math.min(proxy.scrollLeft, Math.max(0, table.offsetWidth - proxy.clientWidth));
+    table.style.transform =
+        `translateX(-${proxy.scrollLeft}px)`;
 }
 
 function populateModuleFilter() {
@@ -1222,8 +1241,13 @@ function onStatusChange(el) {
         return;
     }
     const tcId = el.dataset.id;
-    const value = el.value;
     const tc = poc.testCases.find(t => t.id === tcId);
+    if (tc && !hasTestCaseResults(tc, getPocColumns(poc))) {
+        toast('Fill Expected Result and Actual Result before updating the test status.', 'info');
+        renderTestCases();
+        return;
+    }
+    const value = el.value;
     if (tc) {
         tc.status = value;
         const statusColumn = getPocColumns(poc).find(column => getColumnKind(column) === 'status');
@@ -1609,6 +1633,45 @@ function showAddPocModal() {
     });
 }
 
+function renameCurrentPoc() {
+    renamePoc(currentCustomerId, currentPocId);
+}
+
+function renamePoc(customerId, pocId) {
+    if (!isAdmin) {
+        toggleAdminMode();
+        return;
+    }
+    const customer = getCustomer(customerId);
+    const poc = getPoc(customerId, pocId);
+    if (!customer || !poc) {
+        toast('Module not found.', 'error');
+        return;
+    }
+
+    openModal('Edit Module Name', `
+        <div class="form-group">
+            <label for="editModuleName">Module Name</label>
+            <input type="text" id="editModuleName" value="${escHtml(poc.name)}" maxlength="120" autofocus>
+        </div>
+    `, () => {
+        const input = document.getElementById('editModuleName');
+        const name = input ? input.value.trim() : '';
+        if (!name) {
+            toast('Please enter a module name.', 'error');
+            return false;
+        }
+        poc.name = name;
+        saveData();
+        renderPocGrid();
+        renderDashboard();
+        if (currentCustomerId === customerId && currentPocId === pocId) {
+            document.getElementById('pocTitle').textContent = `${customer.name} → ${poc.name}`;
+        }
+        toast('Module name updated.', 'success');
+    });
+}
+
 function deleteCurrentPoc() {
     if (!isAdmin) { toggleAdminMode(); return; }
     if (!currentPocId) return;
@@ -1658,6 +1721,21 @@ function deleteTestCase(tcId) {
     const poc = getPoc(currentCustomerId, currentPocId);
     if (!poc) return;
     poc.testCases = poc.testCases.filter(t => t.id !== tcId);
+    const testNoColumns = getPocColumns(poc).filter(column => getColumnKind(column) === 'testNo');
+    [...poc.testCases].sort((a, b) => {
+        const first = Number(a.testNo);
+        const second = Number(b.testNo);
+        if (Number.isFinite(first) && Number.isFinite(second)) return first - second;
+        return String(a.testNo ?? '').localeCompare(String(b.testNo ?? ''), undefined, { numeric: true });
+    }).forEach((testCase, index) => {
+        testCase.testNo = index + 1;
+        if (testNoColumns.length) {
+            testCase.values = testCase.values || {};
+            testNoColumns.forEach(column => {
+                testCase.values[column] = index + 1;
+            });
+        }
+    });
     updateExecutionState(poc);
     saveData();
     renderTestCases();

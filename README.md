@@ -32,6 +32,7 @@ When loading existing Firestore data, the app accepts customer records stored as
 - The dashboard's module summary counts only test cases with a populated `Sr. No.` (or `Test No.`), excluding continuation rows and repeated header rows.
 - Admin users can add or delete non-required columns.
 - Admin users can rename a feature with **Edit Feature**; renaming keeps its existing access link and modules.
+- Admin users can rename a module from its feature card or module view with **Edit Module**; renaming keeps its test cases.
 - Test execution must be started with **Start Execution**. It completes automatically when every test case is marked Pass, Fail, or Blocked.
 - The hierarchy is Feature → Module → Test Case. The dashboard summarizes each module's test-case count, execution percentage (cases no longer Not Executed), pass percentage (Pass among final-status cases), and failure count.
 - Dashboard module counts treat each module as one item: not started, currently under test, or completed. Click a module-status count to see matching modules grouped by feature.
